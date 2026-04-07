@@ -1,80 +1,110 @@
-# FreqTweak Concept Analysis (for Sonarium)
+# FreqTweak Concept Analysis for Sonarium
 
-## Purpose of this document
-This document captures **conceptual inheritance** from FreqTweak for Sonarium. It intentionally extracts ideas, interaction patterns, and DSP framing—not code, APIs, or UI style.
+## Purpose
+This document captures **conceptual inheritance** from FreqTweak into Sonarium. It extracts product and interaction lessons, not implementation details.
+
+## Source inspection summary
+Primary reviewed sources:
+- FreqTweak project README (GitHub mirror).
+- Sonosaurus project page (feature descriptions, interaction model).
+- Screenshot page and legacy UI screenshot.
+
+Across sources, FreqTweak consistently presents itself as:
+- FFT-based realtime spectral manipulation and display.
+- A highly interactive filter-drawing GUI.
+- A chain of unusual per-bin processors.
+- A tool that is both “audio toy” and serious sound-design instrument.
 
 ## What FreqTweak fundamentally was
-FreqTweak was an FFT/STFT-based realtime spectral manipulation environment built around direct, visual control of per-bin behavior. In practice it combined:
+FreqTweak was a **realtime STFT spectral playground** that treated frequency bins as directly editable material. Instead of hiding processing behind abstract knobs, it let users:
+- see spectral behavior (pre/post),
+- draw processor shapes directly,
+- attach modulators to spectral processors,
+- iterate quickly between hearing and seeing.
 
-- realtime spectral analysis (including pre/post views)
-- gesture-based editing of spectral transfer curves
-- multiple unusual per-bin processors (not just EQ)
-- modulation of spectral processors over time
+In modern terms, it sat between:
+- an effect plugin,
+- a visual analysis tool,
+- and a performance-oriented instrument.
 
-It behaved less like a traditional “plugin utility” and more like an exploratory performance/sound-design instrument.
+## Why it was musically meaningful
 
-## What made it musically interesting
+### 1) Density of control
+Per-bin editing at 64–4096 bands enabled textures and movement impossible with conventional EQ controls.
 
-1. **Per-bin manipulation at playable resolution**  
-   It allowed users to shape many bins directly, creating textures and motion unavailable in low-bandwidth controls.
+### 2) Immediate audiovisual coupling
+Pre/post spectral views made non-intuitive DSP results legible. That shortened the “guess/listen/tweak” loop.
 
-2. **Visual feedback tightly coupled to audio consequences**  
-   Spectrogram and spectrum views made cause/effect immediate, supporting discovery.
+### 3) Expressive nonlinearity and artifacts
+Processors like warp, per-bin delay/feedback, and pitch scaling intentionally enabled non-transparent outcomes.
 
-3. **Processor designs that embraced strangeness**  
-   Gate, delay, warp, and per-bin pitch operations could produce expressive artifacts, not just transparent correction.
+### 4) Modulation as behavior, not decoration
+Rotate/LFO/randomize modulators made processors dynamic and performable.
 
-4. **Modulation as a first-class operation**  
-   LFO/rotation/randomization concepts encouraged motion and performance behavior rather than static settings.
+### 5) Range from subtle to extreme
+It could do utility shaping, but invited exploratory and experimental practice.
 
-5. **“Toy + serious tool” dual identity**  
-   It welcomed experimentation while still being useful for real sound design and utility analysis.
+## Ideas that still matter in 2026
+- **Direct spectral drawing as primary interaction** (not secondary).
+- **Pre/post visual trust model** for complex FFT processing.
+- **Multi-resolution workflow** (band density, scale modes, zoom).
+- **Bypass/link/A-B speed controls** to keep experimentation safe.
+- **Modulation routability** across processors.
+- **Preset-based exploration loop** for quick iteration and recall.
 
-## Valuable ideas to retain
+## Ideas to discard (or redesign heavily)
+- Legacy dense utility UI and low discoverability interactions.
+- Weak guardrails around unstable settings (e.g., spectral delay feedback).
+- UX patterns requiring many hidden key-chord gestures to discover core behavior.
+- Historical platform/toolkit assumptions as architectural constraints.
+- Ambiguous processor semantics that hide when output is likely to become destructive.
 
-- **Visual-first spectral editing workflow** where interaction happens on top of the spectrum, not hidden in parameter lists.
-- **Pre/post comparative views** to keep processing trustworthy.
-- **High-band-count editing** with zoom and scale options to balance precision and speed.
-- **Processor chain of orthogonal spectral transforms** (gain/threshold/redistribution/time/pitch-domain).
-- **Modulation routing** from generic modulators to multiple targets.
-- **Preset-centric exploration loop** (save/load states quickly while auditioning).
-- **Realtime low-latency mindset** suitable for musical interaction, not only offline rendering.
+## Processor concepts worth reinterpretation for Sonarium
 
-## What Sonarium should explicitly NOT inherit
+### Strong carry-forward (v1 candidates)
+1. **Draw EQ / gain sculpting**
+   - Keep direct paint/draw interaction.
+   - Add smoothing profiles and constrained tools (flat line, tilt, spline).
 
-- **Legacy desktop UI style and dense utility-era layout** (small controls, cramped rows, retro visual language).
-- **Unbounded “unsafe by default” gain/feedback behavior** without modern guardrails and metering.
-- **Weak separation of DSP state and interaction concerns** (Sonarium needs strict modular architecture).
-- **Old platform assumptions** (single historical Linux stack only). Sonarium should be Linux-first but wrapper-ready across modern plugin ecosystems.
-- **One-size processing semantics** that can cause accidental destructive settings without clear feedback.
+2. **Gate (double-threshold behavior)**
+   - Preserve per-bin thresholding concept.
+   - Modernize with clear threshold visualization, soft knees, and envelope timing controls.
 
-## Spectral processors worth reinterpreting
+3. **Per-bin spectral delay**
+   - Preserve time-offset map concept.
+   - Add explicit safety rails for feedback/energy growth.
 
-### 1) Draw EQ (cut/boost)
-Reinterpret as high-resolution draw/gesture EQ with smoothing, quantized gesture options, and optional spectral-domain interpolation.
+4. **Warp (frequency remapping)**
+   - Preserve “frequency→frequency reallocation” concept.
+   - Add identity anchor mode, remap bounds, and anti-folding options.
 
-### 2) Spectral gate
-Reinterpret as per-bin dual-threshold regioning plus musically readable controls (range, softness, hold/release shaping).
+5. **Pitch scaling map**
+   - Preserve per-region pitch remap potential.
+   - Offer musically constrained and free modes.
 
-### 3) Spectral delay
-Reinterpret with per-bin time offset maps, stable feedback handling, and visual delay energy traces.
+### Secondary carry-forward (post-v1)
+- Per-bin limiter/compressor can return later as a carefully designed spectral dynamics suite, not an early v1 priority.
 
-### 4) Spectral warp
-Reinterpret as frequency-to-frequency remap matrix/curve with identity lock, local pinning, and anti-folding options.
+## Interaction model inheritance for Sonarium
+Keep these principles:
+- Draw-first editing on spectral surfaces.
+- Fast modifier-enhanced precision actions.
+- Explicit linked/unlinked channel behavior.
+- Immediate comparison tools (bypass all, pre/post overlays, A/B).
+- Resizable/zoomable views optimized for both macro gestures and micro correction.
 
-### 5) Spectral pitch map
-Reinterpret per-bin scaling as musically constrained pitch mapping with optional tempered anchors and freeform mode.
+Modernize with:
+- Tool-state clarity, hints, and progressive disclosure.
+- Fewer hidden interactions; more explicit visual affordances.
+- Strong undo/redo and non-destructive workflow defaults.
 
-### 6) Spectral smear (new emphasis)
-Not a direct FreqTweak primitive, but strongly aligned with its spirit: energy diffusion over time/frequency neighborhoods for textural shaping.
+## Sonarium conceptual inheritance decision
+Sonarium should inherit FreqTweak’s **core thesis**:
+> Spectral DSP is most musically useful when interaction is direct, visual, and realtime.
 
-## Interaction ideas worth keeping
+Sonarium should not inherit its historical constraints:
+- retro utility ergonomics,
+- fragile safety defaults,
+- and monolithic architecture.
 
-- **Direct drawing and dragging on spectral controls** as the primary gesture vocabulary.
-- **Modifier-based precision gestures** (line draw, constrained move, alternate layer editing), but with discoverable modern affordances.
-- **Bypass and link concepts** across channels/lanes for rapid A/B and stereo coherence.
-- **Zoomable views with explicit scale modes** (linear/log/hybrid).
-- **Fast “experimental loop” UX**: tweak → hear → see → undo/compare → store.
-
-## Conceptual inheritance summary
-Sonarium should inherit FreqTweak’s **instrumental attitude toward spectral DSP**: realtime, visual, and expressive. It should not inherit implementation-era limitations, retro control density, or unstable behavior defaults. The objective is a modern spectral instrument for professional workflows, not a historical emulation.
+The right outcome is a **modern spectral instrument/processor** that is studio-credible yet creatively unconstrained.

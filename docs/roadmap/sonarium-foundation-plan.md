@@ -1,140 +1,177 @@
 # Sonarium Foundation Plan
 
-## Planning intent
-This roadmap emphasizes a strong foundation and testable milestones before full product breadth.
+## Planning principles
+- Sequence for risk retirement, not feature vanity.
+- End every phase with objective testable outcomes.
+- Protect realtime safety and architectural boundaries at all phases.
+- Defer breadth until core interaction and engine behavior are stable.
+
+---
 
 ## Phase 0 — Architecture lock
 
 ### Deliverables
-- architecture decision record (module boundaries, realtime constraints, plugin targets)
-- parameter ID strategy and state schema draft
-- processor order and v1 capability matrix
+- Architecture Decision Records (ADRs) for:
+  - module boundaries,
+  - threading model,
+  - state/parameter schema,
+  - wrapper strategy (standalone, CLAP, LV2; VST3 deferred).
+- v1 processor spec sheets (inputs, outputs, guardrails, expected ranges).
+- performance budget draft (CPU/latency targets per quality profile).
 
-### Testable result
-- architecture review sign-off with no unresolved critical boundary questions
-- agreed latency and threading model documented
+### Testable
+- Design review sign-off with no unresolved critical boundary decisions.
+- Parameter ID registry frozen for v1.
+- Prototype latency calculations validated for planned STFT profiles.
 
-### Not yet in scope
-- full UI implementation
-- full plugin compatibility matrix validation
+### Not yet attempted
+- Full processor implementations.
+- UI design polish.
+- Multi-host plugin certification.
 
 ---
 
-## Phase 1 — STFT DSP core prototype
+## Phase 1 — DSP kernel prototype
 
 ### Deliverables
-- functional STFT forward/inverse pipeline with overlap-add
-- basic processor chain scaffold with bypass routing
-- initial placeholder implementations for v1 processor interfaces
+- Functional STFT analysis/synthesis pipeline.
+- Processor-chain runtime skeleton with bypass/wet-dry semantics.
+- Minimal implementations (or stubs with deterministic behavior) for v1 processor interfaces.
+- Realtime-safe parameter snapshot handoff mechanism.
 
-### Testable result
-- offline and realtime smoke tests proving stable passthrough and bounded CPU use
-- latency reporting from selected FFT/overlap settings
+### Testable
+- Null/passthrough reconstruction tests with defined error tolerance.
+- CPU profiling baseline for representative sample rates/buffer sizes.
+- No-allocation/no-lock assertions in audio callback path.
 
-### Not yet in scope
-- finished processor UX semantics
-- advanced modulation routing
+### Not yet attempted
+- Final musical tuning of processors.
+- Complex modulation UI.
 
 ---
 
-## Phase 2 — Spectrogram rendering prototype
+## Phase 2 — Spectral visualization prototype
 
 ### Deliverables
-- pre/post spectral data feed from core to UI layer
-- spectrogram and magnitude prototype widgets
-- zoom/freeze primitives
+- Core→UI spectral data bridge (decimated analysis stream).
+- Pre/post spectrogram + magnitude views.
+- Zoom/freeze/scale-mode interaction primitives.
 
-### Testable result
-- realtime display tracks input/output changes with acceptable frame rate and no audio thread stalls
+### Testable
+- Visual display tracks audible changes with acceptable frame cadence.
+- Audio callback remains stable under heavy UI redraw.
+- Pre/post comparison visually coherent for known test signals.
 
-### Not yet in scope
-- polished visual design system
-- full editor panel layout
+### Not yet attempted
+- Full styling system.
+- Advanced edit tools.
 
 ---
 
-## Phase 3 — Interactive spectral drawing
+## Phase 3 — Interactive spectral editing prototype
 
 ### Deliverables
-- draw/select gesture tools on spectral controls
-- smoothing/interpolation for drawn curves
-- undo/redo command backbone for edit operations
+- Draw/select tools for spectral gain-shaping.
+- Constraint tools (line/tilt/snap) and smoothing behavior.
+- Undo/redo command stack for edit operations.
+- Initial channel-link handling.
 
-### Testable result
-- users can draw spectral EQ and hear predictable, immediate results with undo safety
+### Testable
+- A user can execute edit → audition → undo/redo loops reliably.
+- Gesture latency and edit determinism meet interaction thresholds.
+- No desynchronization between visual state and audible state.
 
-### Not yet in scope
-- full multi-tool workflow depth
-- advanced warp map editing UX
+### Not yet attempted
+- Full warp-map authoring UX depth.
+- Complete processor editor suite.
 
 ---
 
-## Phase 4 — Standalone app shell
+## Phase 4 — Standalone shell
 
 ### Deliverables
-- standalone host shell with audio I/O setup and routing
-- session open/save for local state
-- baseline preset browser integration
+- Linux-first standalone host shell (audio device, routing, transport basics).
+- Session save/load around shared engine state.
+- Baseline preset browser and A/B compare path.
 
-### Testable result
-- app launches, processes live audio, saves/restores sessions reliably
+### Testable
+- Cold start to audio pass-through within acceptable startup time.
+- Stable live processing across common Linux audio setups.
+- Session and preset roundtrip integrity.
 
-### Not yet in scope
-- advanced device abstraction layers across all platforms
-- extensive onboarding/tutorial system
+### Not yet attempted
+- Cross-platform installer/distribution polish.
+- Advanced onboarding/tutorial systems.
 
 ---
 
-## Phase 5 — Plugin wrapper
+## Phase 5 — Plugin wrapper foundation
 
 ### Deliverables
-- CLAP + LV2 wrapper integration around shared core
-- host automation plumbing for exposed parameters
-- basic validation in representative Linux hosts
+- CLAP and LV2 wrapper integration with shared engine facade.
+- Host automation parameter mapping.
+- Initial latency/reporting compliance behavior.
 
-### Testable result
-- plugin loads, processes audio, and responds to automation in supported hosts
+### Testable
+- Plugin load/instantiate/process/unload stability in target hosts.
+- Automation playback reproducibility for smoke scenarios.
+- State save/restore in host projects.
 
-### Not yet in scope
-- optional VST3 distribution readiness
-- exhaustive host-by-host edge-case certification
+### Not yet attempted
+- Full VST3 distribution pipeline.
+- Exhaustive host-by-host certification matrix.
 
 ---
 
-## Phase 6 — Presets and modulation
+## Phase 6 — Presets, modulation, macro control
 
 ### Deliverables
-- finalized preset format v1 with versioning
-- LFO and envelope follower modulation sources
-- macro mapping and serialization
+- Versioned preset format v1 (migration-ready).
+- LFO + envelope follower modulation sources finalized.
+- Macro mapping editor logic and serialization.
+- Safety clamping/normalization across modulation targets.
 
-### Testable result
-- mappings persist across save/load; modulation behaves deterministically under automation
+### Testable
+- Preset compatibility across minor schema revisions.
+- Deterministic modulation behavior under automation playback.
+- Macro movements produce bounded, artifact-controlled parameter changes.
 
-### Not yet in scope
-- large curated factory content library
-- deep performance scripting system
+### Not yet attempted
+- Massive factory content program.
+- Advanced scripting/modulation graph ecosystems.
 
 ---
 
-## Phase 7 — UI refinement
+## Phase 7 — UI refinement and workflow polish
 
 ### Deliverables
-- visual polish pass (legibility, contrast, spacing, interaction clarity)
-- improved inspector panels and workflow shortcuts
-- accessibility and usability review fixes
+- Visual refinement pass (contrast, hierarchy, spacing, readability).
+- Efficiency improvements for high-frequency tasks.
+- Accessibility and ergonomics adjustments.
+- Finalized v1 workflow defaults and safety feedback messaging.
 
-### Testable result
-- usability checklist completion with reduced error rate in common tasks
+### Testable
+- Structured usability sessions for top workflows.
+- Reduced user error and faster time-to-target vs earlier phase baseline.
+- No regression in audio-thread stability from UI polish changes.
 
-### Not yet in scope
-- major scope expansion beyond v1 processor/modulation set
-- full redesign of interaction model
+### Not yet attempted
+- Major product scope expansion.
+- Fundamental interaction model rewrites.
 
 ---
 
-## Cross-phase acceptance criteria
-- Realtime safety is never regressed for feature gains.
-- DSP and UI remain separable modules.
-- Each phase ends with demonstrable, testable behavior.
-- Deferred items remain documented to prevent silent scope creep.
+## Cross-phase exit criteria (always active)
+- Realtime safety regressions block phase completion.
+- Architectural boundaries remain enforced (no wrapper/UI DSP leakage).
+- Each phase ships with reproducible checks and demo scenarios.
+- Deferred scope remains documented to prevent silent scope creep.
+
+## Best immediate next step after this documentation pass
+Run a **Phase 0 architecture lock workshop** and produce ADRs for:
+1. STFT profile set and latency policy,
+2. parameter/state schema and IDs,
+3. wrapper sequence (standalone, CLAP, LV2),
+4. UI-to-core command/state bridge.
+
+This single step unlocks implementation with minimal rework risk.

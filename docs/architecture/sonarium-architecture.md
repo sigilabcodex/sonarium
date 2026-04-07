@@ -1,154 +1,196 @@
 # Sonarium Architecture Proposal
 
-## Goals
-- Keep DSP, UI, and wrapper concerns cleanly separated.
-- Enable standalone + plugin targets without duplicating core logic.
-- Preserve realtime safety and predictable latency.
-- Support iterative expansion of processors/modulators.
+## Architectural goals
+1. Keep audio realtime paths deterministic and lock-free.
+2. Decouple DSP core from UI and host wrappers.
+3. Support standalone and plugin deployment from one shared core.
+4. Make processor/modulation growth additive rather than structural rewrite.
+5. Preserve clear boundaries for testing and performance profiling.
 
-## 1) DSP Core Module
+## 1) System decomposition
 
-### 1.1 STFT engine
-Responsibilities:
-- input buffering/windowing
-- overlap-add reconstruction
-- configurable FFT size and overlap
-- per-channel spectral frame management
+### 1.1 Core DSP domain (`core`)
+Owns all audio processing and canonical state interpretation:
+- STFT analysis/synthesis engine.
+- Spectral processor chain runtime.
+- Modulation runtime.
+- Parameter transformation (normalized ↔ engineering units).
+- Safety policies (clamps, saturation strategy, bounds).
 
-Design notes:
-- deterministic processing block API (host block -> internal frame scheduler)
-- explicit latency reporting from FFT size/overlap/window pipeline
-- denormal-safe and SIMD-friendly inner loops
+### 1.2 Presentation domain (`ui`)
+Owns visualization and editing semantics:
+- Spectral rendering models.
+- Interaction tools and edit gestures.
+- Editor/panel composition.
+- Non-audio command generation (edits, mappings, preset actions).
 
-### 1.2 Processor chain
-Responsibilities:
-- ordered list of spectral processors operating on frame buffers
-- bypass, reorder policy (v1 may lock order; architecture should permit future reordering)
-- channel-link modes (dual mono / linked stereo behaviors)
+### 1.3 Host integration domain (`wrappers`)
+Owns platform/format adaptation:
+- Standalone audio/MIDI/device lifecycle.
+- Plugin format ABI integration.
+- Host automation transport and transport/tempo bridge.
+- State handoff to/from core.
 
-Initial processors:
-- draw EQ
-- gate
-- smear
-- delay
-- warp
-- pitch map
+**Boundary rule**: wrappers and UI can request changes; only core executes DSP behavior.
 
-### 1.3 Modulation system
-Responsibilities:
-- control-rate source generation (LFO, envelope follower, macro values)
-- mapping/routing to processor parameters
-- depth/scaling/offset shaping
+## 2) STFT engine responsibilities and contract
 
-Design notes:
-- modulation graph remains lightweight in v1 (source -> mapping -> parameter)
-- smoothing to avoid zipper noise
-- deterministic evaluation order each audio quantum
+### Responsibilities
+- Windowing, overlap scheduling, FFT/iFFT execution, overlap-add reconstruction.
+- Multi-channel frame handling.
+- Latency accounting and reporting.
+- Quality profile handling (FFT size, overlap, window choice).
 
-### 1.4 Parameter system
-Responsibilities:
-- canonical parameter IDs and ranges
-- normalized <-> engineering unit conversions
-- automation-safe update pathway
-- state serialization hooks
+### Contract
+- Input: interleaved or planar audio blocks from host wrapper.
+- Output: processed blocks with known algorithmic latency.
+- Side outputs: decimated analysis buffers for UI consumption.
 
-Design notes:
-- lock-free or wait-free handoff from UI/host thread to audio thread
-- sample-accurate automation optional; block-accurate minimum for v1
+### Justification
+STFT is the architectural fulcrum. Isolating it enables:
+- precise performance profiling,
+- deterministic latency behavior,
+- future processor evolution without touching wrapper logic.
 
-## 2) UI Module
+## 3) Processor chain model
 
-### 2.1 Rendering layer
-Responsibilities:
-- spectrogram + magnitude rendering
-- pre/post visual channels
-- zoom and freeze display logic
-- GPU-accelerated drawing path where available
+### v1 model
+- Fixed-order chain (predictable, easier QA).
+- Per-processor bypass and wet/dry mix.
+- Channel mode support: linked stereo vs dual-mono behavior where applicable.
 
-Design notes:
-- renderer consumes decimated analysis streams, never blocks audio thread
-- fallback CPU path for environments without robust GPU contexts
+### Runtime behavior
+- Processors operate on spectral frames/buffers in deterministic order.
+- Parameter snapshots are atomically swapped at block boundaries.
+- Optional per-processor smoothing inside process blocks.
 
-### 2.2 Interaction layer
-Responsibilities:
-- spectral draw gestures
-- selection, transform, constrained edits
-- modulation assignment gestures
-- undo/redo command stack integration
+### Why fixed-order first
+A reorderable graph is attractive but costly for test matrix and UX complexity. Fixed order provides musical consistency and faster stabilization for v1.
 
-Design notes:
-- gesture model should be tool-based but minimal (draw, select, warp, inspect)
-- visible interaction states and value readouts
+## 4) Modulation system boundaries
 
-### 2.3 Editor panels
-- processor panels (compact + expanded)
-- modulation panel
-- macro panel
-- preset browser and A/B controls
+### In scope for v1
+- Sources: LFO, envelope follower, macros.
+- Mapping layer: source → transform(depth/offset/curve) → target parameter.
+- Deterministic evaluation each audio quantum.
 
-## 3) Wrapper Layer
+### Out of scope for v1
+- Arbitrary modulation graph feedback networks.
+- Per-sample modulation matrix editing UI complexity.
 
-### 3.1 Standalone app
-- audio I/O integration for Linux-first workflows (JACK/PipeWire path)
-- device and routing management
-- session state load/save
+### Realtime model
+- Source generation and mapping evaluation occur in audio-safe code.
+- UI only edits mapping definitions through lock-free command/state channels.
 
-### 3.2 LV2 plugin
-- Linux ecosystem interoperability and distribution path
+## 5) Parameter and state architecture
 
-### 3.3 CLAP plugin
-- modern plugin-host capabilities, flexible automation/modulation support
+### Parameter model
+- Stable parameter IDs.
+- Normalized [0..1] transport representation.
+- Strong type metadata: float/int/enum/toggle.
+- Conversion functions and display formatting in shared schema.
 
-### 3.4 Optional VST3
-- cross-platform compatibility target after core stability
+### State model
+- Versioned preset/session payload with migration hooks.
+- Serializable objects:
+  - processor settings,
+  - modulation mappings,
+  - macro definitions,
+  - UI view preferences (non-audio-critical).
 
-Wrapper principle: wrappers adapt host/runtime APIs to core engine contracts; they do not own DSP logic.
+### Synchronization strategy
+- Audio thread reads immutable snapshots.
+- UI/host writes to staging state.
+- Atomic pointer/index swap at safe boundary.
 
-## 4) State System
+## 6) UI and rendering boundaries
 
-### 4.1 Preset format
-- versioned, human-inspectable format (e.g., JSON/TOML-like schema)
-- includes processor parameters, chain state, visualization prefs
-- forward-compatible migration hooks
+### Rendering pipeline
+- UI consumes downsampled/decimated spectral data only.
+- Renderer thread never blocks audio callback.
+- GPU acceleration preferred; CPU fallback maintained.
 
-### 4.2 Modulation mapping state
-- source definitions
-- target parameter references by stable IDs
-- depth/curve/range metadata
+### Interaction pipeline
+- Gestures compile to semantic edit commands (not direct DSP mutation).
+- Command stream updates core parameter/state model via thread-safe bridge.
+- Undo/redo stores semantic edits, not raw buffers.
 
-### 4.3 Macro controls
-- macro definitions and named intents
-- many-to-many mapping to parameters with scaling transforms
+### Why this split
+It allows rich interaction without contaminating realtime DSP with UI concerns.
 
-## 5) Performance and Realtime Concerns
+## 7) Standalone vs plugin strategy
 
-### 5.1 Latency
-- explicit computation and reporting from STFT settings
-- UI display of “quality vs latency” profile
+### Shared engine
+- One `EngineFacade` style API consumed by all wrappers.
 
-### 5.2 FFT overlap strategy
-- support practical overlap presets (e.g., 2x/4x/8x)
-- guardrails against CPU overload from extreme combinations
+### Standalone wrapper (early)
+- Linux-first audio I/O path (JACK/PipeWire).
+- Device/routing/session lifecycle management.
 
-### 5.3 GPU rendering
-- isolate GPU work to UI thread/process
-- avoid synchronous GPU readbacks in realtime paths
+### Plugin wrappers
+- CLAP + LV2 first for Linux ecosystem and modern host support.
+- VST3 as later compatibility expansion.
 
-### 5.4 Thread safety
-- no locks in audio callback hot path
-- double-buffered/shared snapshot state for UI meters/analysis
-- bounded queues for cross-thread events
+### Justification
+Linux-first delivery aligns with project intent, while shared facade keeps cross-format cost bounded.
 
-## 6) Recommended repository-level module split
+## 8) Likely implementation stack (recommended)
+- Language: modern C++ (performance, ecosystem compatibility).
+- FFT backend: FFTW or equivalent high-performance backend abstraction.
+- Plugin layer candidates: CLAP/LV2 SDKs directly or JUCE-i/o-independent bridging where appropriate.
+- UI rendering: GPU-capable immediate/declarative layer with explicit fallback path.
+- Serialization: human-readable structured format (JSON/TOML) with schema version field.
 
-- `core/dsp` — STFT, processors, modulation runtime
-- `core/params` — parameter schema and automation translation
-- `core/state` — preset and mapping serialization
-- `ui/render` — spectrogram/magnitude rendering
-- `ui/editor` — interaction/tools/panels
+(Exact framework selection should be locked in Phase 0 ADRs.)
+
+## 9) Performance and realtime-safety risks
+
+### High-risk areas
+1. FFT size/overlap combinations causing CPU spikes.
+2. Spectral delay/feedback maps causing runaway energy.
+3. UI data transport backpressure causing callback jitter if poorly isolated.
+4. Overly granular automation/modulation updates causing zipper artifacts.
+5. Memory churn from dynamic allocations in audio path.
+
+### Required safeguards
+- No locks, no heap allocation, no blocking calls in audio callback.
+- Hard parameter clamps and safety limits for unstable processors.
+- Bounded queues/ring buffers for cross-thread data.
+- Profiling gates and regression thresholds for CPU and xruns.
+
+## 10) Testing strategy
+
+### Unit tests
+- STFT reconstruction error bounds.
+- Parameter conversion and migration correctness.
+- Modulation mapping math determinism.
+
+### Property/invariant tests
+- Processor output remains finite (no NaN/Inf) under randomized legal params.
+- State roundtrip (serialize/deserialize) invariants.
+
+### Integration tests
+- Offline render snapshots for processor chains.
+- Wrapper-core state synchronization behavior.
+- Automation playback determinism for fixed seeds.
+
+### Realtime/system checks
+- Long-run xrun/callback-overrun monitoring at representative buffer sizes.
+- CPU headroom benchmarks across quality profiles.
+- UI stress with active spectral rendering while processing.
+
+## 11) Recommended initial module layout
+- `core/stft`
+- `core/processors`
+- `core/modulation`
+- `core/params`
+- `core/state`
+- `engine` (facade + scheduling glue)
+- `ui/render`
+- `ui/editor`
 - `wrappers/standalone`
-- `wrappers/lv2`
 - `wrappers/clap`
-- `wrappers/vst3` (optional)
+- `wrappers/lv2`
+- `wrappers/vst3` (deferred)
 
-This split keeps Sonarium evolvable while preserving strict realtime and portability boundaries.
+This layout provides high cohesion inside domains and low coupling across domains, which is essential for Sonarium’s v1 scope discipline.
