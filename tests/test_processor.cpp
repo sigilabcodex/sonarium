@@ -61,4 +61,19 @@ SONARIUM_TEST(gain_mask_output_stays_finite_under_extreme_nodes) {
     REQUIRE_TRUE(all_finite, "Output contains NaN/Inf");
 }
 
+
+SONARIUM_TEST(engine_facade_single_node_updates_flow_through_state_boundary) {
+    sonarium::engine::EngineFacade engine({512, 128});
+
+    engine.set_gain_mask_node(3, 0.9f);
+    auto state = engine.state();
+    REQUIRE_TRUE(std::abs(state.gain_mask.mask_nodes_normalized[3] - 0.9f) < 1e-6f,
+                 "Node update should be reflected in engine state snapshot");
+
+    engine.set_gain_mask_node(3, -1.0f);
+    state = engine.state();
+    REQUIRE_TRUE(std::abs(state.gain_mask.mask_nodes_normalized[3] - 0.0f) < 1e-6f,
+                 "Node update should be clamped to normalized range");
+}
+
 void register_processor_tests() {}
