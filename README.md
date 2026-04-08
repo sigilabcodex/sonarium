@@ -1,6 +1,6 @@
 # Sonarium (Foundation + Spectral Interaction Prototype)
 
-This repository contains Sonarium's early DSP core plus a minimal spectral interaction prototype.
+This repository contains Sonarium's early DSP core plus a minimal graphical spectral interaction prototype.
 
 ## Build
 
@@ -29,10 +29,19 @@ The offline harness runs a generated tone through STFT + spectral gain mask proc
 ./build/sonarium_spectral_interaction_prototype
 ```
 
-The prototype provides a terminal visualization/editor loop for the gain-mask interaction:
+The prototype opens a lightweight X11 window with three live graphs:
 
-- pre/post/delta spectrum snapshots,
-- current gain-mask curve view,
-- direct `set` and `drag` commands that edit the mask through `EngineFacade` state APIs.
+- pre spectrum (dB),
+- gain-mask curve (dB),
+- post spectrum (dB).
 
-See `docs/architecture/phase2-spectral-interaction-prototype-pass.md` for scope, boundaries, and next steps.
+Interaction:
+
+- Left click in the mask plot: set a node.
+- Left drag in the mask plot: draw a ramp across nodes.
+- Press `r`: reset mask.
+- Press `q`: quit.
+
+Edits are routed through `EngineFacade` state APIs and immediately trigger post-spectrum recomputation.
+
+See `docs/architecture/phase2-spectral-interaction-prototype-pass.md` for scope, boundaries, limitations, and next-step recommendations.
