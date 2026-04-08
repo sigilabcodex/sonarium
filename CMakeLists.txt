@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(SONARIUM_ENABLE_GUI_PROTOTYPE "Build the X11 spectral interaction prototype" ON)
+
 add_library(sonarium_core
     src/core/stft/stft_engine.cpp
     src/core/processors/spectral_gain_mask_processor.cpp
@@ -16,8 +18,12 @@ target_include_directories(sonarium_core PUBLIC src)
 add_executable(sonarium_offline_harness src/app/offline_harness.cpp)
 target_link_libraries(sonarium_offline_harness PRIVATE sonarium_core)
 
-add_executable(sonarium_spectral_interaction_prototype src/app/spectral_interaction_prototype.cpp)
-target_link_libraries(sonarium_spectral_interaction_prototype PRIVATE sonarium_core)
+if(SONARIUM_ENABLE_GUI_PROTOTYPE)
+    find_package(X11 REQUIRED)
+
+    add_executable(sonarium_spectral_interaction_prototype src/app/spectral_interaction_prototype.cpp)
+    target_link_libraries(sonarium_spectral_interaction_prototype PRIVATE sonarium_core X11::X11)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

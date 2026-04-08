@@ -7,50 +7,57 @@ This pass delivers the smallest end-to-end interaction prototype proving Sonariu
 - visualize a drawable gain-mask shape,
 - edit mask values directly,
 - route edits through engine state boundaries,
-- hear/inspect meaningful before/after response.
+- inspect meaningful before/after response.
 
 This is intentionally **not** a final product UI, plugin wrapper, modulation pass, or multi-processor pass.
 
 ## What was implemented
 
-### 1) Prototype visualization/editor harness
-A new executable, `sonarium_spectral_interaction_prototype`, provides a lightweight terminal-based interaction loop for rapid validation:
+### 1) First graphical prototype executable
+`sonarium_spectral_interaction_prototype` is now a minimal native window prototype.
 
-- pre spectrum sparkline,
-- post spectrum sparkline,
-- delta sparkline,
-- current mask (in dB) sparkline,
-- numeric band summary for quick inspection.
+The window displays:
 
-The harness generates a mixed-tone demo signal and updates the display after every edit command.
+- **pre spectrum** (dB),
+- **gain mask** curve (dB),
+- **post spectrum** (dB).
 
-### 2) Minimal direct gain-mask editing model
-The prototype supports:
+The app uses an immediate redraw model: every edit triggers a state update and immediate re-render.
 
-- `set <node> <value>` for direct point edits,
-- `drag <start> <end> <start_value> <end_value>` for simple interpolated strokes,
-- `reset` for restoring default mask,
-- `show` for inspection without editing.
+### 2) Mouse interaction model
+Inside the mask panel:
 
-This interaction model is deliberately narrow and readable: enough to evaluate the gesture without introducing a full editor architecture.
+- **click** sets a node value,
+- **drag** paints an interpolated ramp between the last and current node,
+- the mask curve redraws after each edit,
+- post spectrum is recomputed and redrawn after each edit.
 
-### 3) Clean state bridge through `EngineFacade`
-`EngineFacade` now owns a canonical `EngineState` snapshot and exposes minimal state-safe mutation APIs:
+Keyboard helpers:
 
-- `update_state(...)`
-- `set_gain_mask_node(...)`
-- `set_gain_mask_nodes(...)`
-- `state()`
+- `r` resets mask,
+- `q` quits.
 
-All edits synchronize DSP processor parameters through `sync_processors_from_state()`. The prototype app does not reach into DSP classes directly.
+### 3) Clean engine/state boundary preserved
+The window app does not mutate DSP internals directly.
 
-## Architectural notes
+All mask edits are routed through:
 
-- DSP remains in `core` (`stft`, processors, state structs).
-- The prototype interaction layer is in `src/app` and talks only to `engine::EngineFacade`.
-- The visualization is intentionally temporary and text-based, but the state/control seam mirrors the intended UI→core command path.
+- `EngineFacade::set_gain_mask_nodes(...)`
+- `EngineFacade::update_state(...)` (reset path)
 
-## Validation workflow
+`EngineFacade` remains the seam responsible for synchronizing processor parameters from state.
+
+## UI approach chosen
+The prototype uses a **minimal immediate-mode style native X11 loop**:
+
+- single event loop,
+- direct drawing of line plots,
+- no heavyweight UI framework,
+- small temporary code footprint suitable for prototyping.
+
+This keeps the pass focused on validating interaction and state flow rather than framework architecture.
+
+## Build and run
 
 ```bash
 cmake -S . -B build
@@ -58,26 +65,27 @@ cmake --build build
 ./build/sonarium_spectral_interaction_prototype
 ```
 
-Try these quick checks:
+## Architectural notes
 
-1. `set 48 0.15` (attenuate high mask node) and observe high-band post/delta changes.
-2. `drag 0 63 0.8 0.2` and observe broad spectral tilt.
-3. `reset` to confirm state ↔ output consistency.
+- DSP remains in `core` (`stft`, processors, state structs).
+- Engine/state boundary remains in `engine::EngineFacade`.
+- UI code lives in `src/app` and only talks to `EngineFacade`.
+- Analysis in this pass is still a lightweight DFT helper for legibility/correctness.
 
 ## Temporary limitations
 
-1. Visualization is terminal-only (no final graphics backend yet).
-2. Spectrum analysis in the prototype uses a lightweight correctness-first DFT helper, not a realtime UI pipeline.
-3. No undo/redo stack.
-4. Single processor only.
-5. No dedicated downsampled analysis stream from STFT yet.
+1. Graphics path is a prototype-only native window, not a production UI layer.
+2. No plugin wrapper integration.
+3. No undo/redo command stack.
+4. No dedicated decimated analysis stream from the STFT path.
+5. Single processor scope only.
 
-These are intentional for a disciplined prototype pass.
+These limitations are intentional for this phase.
 
-## Recommended next pass
-After this prototype, prioritize a dedicated **analysis data bridge pass**:
+## Recommended next step
+Next pass should focus on a **UI-analysis bridge refinement**:
 
-1. add decimated pre/post analysis buffers emitted from core/engine for UI consumption,
-2. keep command-driven mask editing API and begin translating to a lightweight 2D view,
-3. add basic edit history (undo/redo semantic commands),
-4. preserve current state boundary while preparing for standalone wrapper integration.
+1. emit reusable analysis frames from engine/core for UI consumption,
+2. decouple plotting data prep from view rendering,
+3. add semantic command history (undo/redo),
+4. keep current engine boundary unchanged while preparing for future wrapper-facing UI.
