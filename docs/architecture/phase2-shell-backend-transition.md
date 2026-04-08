@@ -17,17 +17,18 @@ Unchanged by design:
 
 - DSP core (`stft`, `spectral_gain_mask_processor`),
 - engine/state boundary and synchronization via `EngineFacade`,
-- gain-mask interaction concept (click-set + drag-ramp edits),
+- gain-mask interaction concept (click/drag mask editing routed through engine state),
 - single-processor scope and non-plugin status.
 
 ## New prototype shell approach
-The prototype now uses:
+The prototype uses:
 
 - GLFW for window creation, input, and context setup,
-- a minimal OpenGL immediate-mode drawing path for line plots,
-- the same edit -> engine facade update -> recompute loop.
+- minimal OpenGL immediate-mode drawing for spectra + mask,
+- an edit → `EngineFacade` update → recompute loop,
+- lightweight in-window affordance overlay + node/value feedback.
 
-This keeps implementation effort small while de-risking backend portability.
+This keeps implementation effort small while de-risking backend portability and making interaction behavior obvious enough for real validation.
 
 ## Build/dependency notes
 At configure/build time the prototype requires:
@@ -52,7 +53,7 @@ Prototype limitations in this pass:
 
 - no custom Wayland protocol integration,
 - no IME/text editing UI stack,
-- no advanced high-DPI text rendering (plots remain functional; visuals are intentionally minimal),
+- no advanced high-DPI text rendering,
 - no persistent window state/session management.
 
-These limitations are acceptable for the interaction-validation prototype and can be revisited in a later UI architecture pass.
+These limitations remain acceptable for the interaction-validation prototype and can be revisited during a later UI architecture pass.
