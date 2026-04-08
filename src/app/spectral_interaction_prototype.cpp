@@ -1,8 +1,7 @@
 #include "core/params/parameter_model.h"
 #include "engine/engine_facade.h"
 
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
+#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <cmath>
@@ -14,10 +13,10 @@
 namespace {
 
 struct Rect {
-    int x = 0;
-    int y = 0;
-    int w = 0;
-    int h = 0;
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
 };
 
 std::vector<float> make_demo_signal(std::size_t sample_rate, std::size_t frames) {
@@ -74,64 +73,56 @@ std::vector<float> mask_to_db(const std::vector<float>& mask_nodes) {
     return out;
 }
 
-bool contains(const Rect& rect, int px, int py) {
+bool contains(const Rect& rect, float px, float py) {
     return px >= rect.x && py >= rect.y && px < (rect.x + rect.w) && py < (rect.y + rect.h);
 }
 
-int map_x_to_index(const Rect& rect, int px, std::size_t size) {
+int map_x_to_index(const Rect& rect, float px, std::size_t size) {
     if (size < 2) {
         return 0;
     }
 
-    const float u = std::clamp(static_cast<float>(px - rect.x) / static_cast<float>(std::max(1, rect.w - 1)), 0.0f, 1.0f);
+    const float u = std::clamp((px - rect.x) / std::max(1.0f, rect.w - 1.0f), 0.0f, 1.0f);
     return static_cast<int>(u * static_cast<float>(size - 1));
 }
 
-float map_y_to_normalized(const Rect& rect, int py) {
-    const float v = std::clamp(static_cast<float>(py - rect.y) / static_cast<float>(std::max(1, rect.h - 1)), 0.0f, 1.0f);
+float map_y_to_normalized(const Rect& rect, float py) {
+    const float v = std::clamp((py - rect.y) / std::max(1.0f, rect.h - 1.0f), 0.0f, 1.0f);
     return sonarium::core::params::clamp_normalized(1.0f - v);
 }
 
-int map_index_to_x(const Rect& rect, std::size_t index, std::size_t size) {
+float map_index_to_x(const Rect& rect, std::size_t index, std::size_t size) {
     if (size < 2) {
         return rect.x;
     }
 
     const float u = static_cast<float>(index) / static_cast<float>(size - 1);
-    return rect.x + static_cast<int>(u * static_cast<float>(rect.w - 1));
+    return rect.x + (u * (rect.w - 1.0f));
 }
 
-void draw_frame(Display* display, Drawable drawable, GC gc, const Rect& rect) {
-    XDrawRectangle(display, drawable, gc, rect.x, rect.y, rect.w, rect.h);
+void draw_rect_outline(const Rect& rect) {
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(rect.x, rect.y);
+    glVertex2f(rect.x + rect.w, rect.y);
+    glVertex2f(rect.x + rect.w, rect.y + rect.h);
+    glVertex2f(rect.x, rect.y + rect.h);
+    glEnd();
 }
 
-void draw_label(Display* display, Drawable drawable, GC gc, int x, int y, const std::string& label) {
-    XDrawString(display, drawable, gc, x, y, label.c_str(), static_cast<int>(label.size()));
-}
-
-void draw_curve(Display* display,
-                Drawable drawable,
-                GC gc,
-                const Rect& rect,
-                const std::vector<float>& values,
-                float min_value,
-                float max_value) {
+void draw_curve(const Rect& rect, const std::vector<float>& values, float min_value, float max_value) {
     if (values.size() < 2) {
         return;
     }
 
     const float span = std::max(1e-6f, max_value - min_value);
-    for (std::size_t i = 1; i < values.size(); ++i) {
-        const int x0 = map_index_to_x(rect, i - 1, values.size());
-        const int x1 = map_index_to_x(rect, i, values.size());
-
-        const float y0_n = std::clamp((values[i - 1] - min_value) / span, 0.0f, 1.0f);
-        const float y1_n = std::clamp((values[i] - min_value) / span, 0.0f, 1.0f);
-
-        const int y0 = rect.y + rect.h - 1 - static_cast<int>(y0_n * static_cast<float>(rect.h - 1));
-        const int y1 = rect.y + rect.h - 1 - static_cast<int>(y1_n * static_cast<float>(rect.h - 1));
-        XDrawLine(display, drawable, gc, x0, y0, x1, y1);
+    glBegin(GL_LINE_STRIP);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const float x = map_index_to_x(rect, i, values.size());
+        const float y_n = std::clamp((values[i] - min_value) / span, 0.0f, 1.0f);
+        const float y = rect.y + rect.h - 1.0f - (y_n * std::max(1.0f, rect.h - 1.0f));
+        glVertex2f(x, y);
     }
+    glEnd();
 }
 
 class PrototypeWindow {
@@ -144,92 +135,64 @@ class PrototypeWindow {
         refresh_analysis();
     }
 
-    void run() {
-        Display* display = XOpenDisplay(nullptr);
-        if (display == nullptr) {
-            return;
+    bool run() {
+        if (glfwInit() == GLFW_FALSE) {
+            return false;
         }
 
-        const int screen = DefaultScreen(display);
-        Window window = XCreateSimpleWindow(display,
-                                            RootWindow(display, screen),
-                                            120,
-                                            120,
-                                            kWindowWidth,
-                                            kWindowHeight,
-                                            1,
-                                            BlackPixel(display, screen),
-                                            WhitePixel(display, screen));
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-        XStoreName(display, window, "Sonarium Spectral Interaction Prototype");
-        XSelectInput(display, window, ExposureMask | KeyPressMask | ButtonPressMask | ButtonReleaseMask |
-                                          PointerMotionMask | StructureNotifyMask);
+        GLFWwindow* window =
+            glfwCreateWindow(kWindowWidth, kWindowHeight, "Sonarium Spectral Interaction Prototype", nullptr, nullptr);
+        if (window == nullptr) {
+            glfwTerminate();
+            return false;
+        }
 
-        Atom wm_delete = XInternAtom(display, "WM_DELETE_WINDOW", False);
-        XSetWMProtocols(display, window, &wm_delete, 1);
+        glfwMakeContextCurrent(window);
+        glfwSwapInterval(1);
+        glfwSetWindowUserPointer(window, this);
 
-        GC gc = XCreateGC(display, window, 0, nullptr);
-        XMapWindow(display, window);
-
-        bool running = true;
-        while (running) {
-            XEvent event;
-            XNextEvent(display, &event);
-
-            switch (event.type) {
-                case Expose:
-                    if (event.xexpose.count == 0) {
-                        draw(display, window, gc, event.xexpose.width, event.xexpose.height);
-                    }
-                    break;
-                case ConfigureNotify:
-                    draw(display, window, gc, event.xconfigure.width, event.xconfigure.height);
-                    break;
-                case ButtonPress:
-                    if (event.xbutton.button == Button1) {
-                        begin_drag(event.xbutton.x, event.xbutton.y);
-                        draw(display, window, gc, kWindowWidth, kWindowHeight);
-                    }
-                    break;
-                case MotionNotify:
-                    if (dragging_) {
-                        continue_drag(event.xmotion.x, event.xmotion.y);
-                        draw(display, window, gc, kWindowWidth, kWindowHeight);
-                    }
-                    break;
-                case ButtonRelease:
-                    if (event.xbutton.button == Button1) {
-                        dragging_ = false;
-                    }
-                    break;
-                case KeyPress: {
-                    char buffer[8] = {};
-                    KeySym key = 0;
-                    XLookupString(&event.xkey, buffer, sizeof(buffer), &key, nullptr);
-                    if (buffer[0] == 'q') {
-                        running = false;
-                    }
-                    if (buffer[0] == 'r') {
-                        engine_.update_state(sonarium::core::state::EngineState{});
-                        mask_nodes_ = engine_.state().gain_mask.mask_nodes_normalized;
-                        refresh_analysis();
-                        draw(display, window, gc, kWindowWidth, kWindowHeight);
-                    }
-                    break;
-                }
-                case ClientMessage:
-                    if (static_cast<Atom>(event.xclient.data.l[0]) == wm_delete) {
-                        running = false;
-                    }
-                    break;
-                default:
-                    break;
+        glfwSetKeyCallback(window, [](GLFWwindow* w, int key, int, int action, int) {
+            auto* self = static_cast<PrototypeWindow*>(glfwGetWindowUserPointer(w));
+            if (self != nullptr) {
+                self->on_key(w, key, action);
             }
+        });
+
+        glfwSetMouseButtonCallback(window, [](GLFWwindow* w, int button, int action, int) {
+            auto* self = static_cast<PrototypeWindow*>(glfwGetWindowUserPointer(w));
+            if (self != nullptr) {
+                self->on_mouse_button(w, button, action);
+            }
+        });
+
+        glfwSetCursorPosCallback(window, [](GLFWwindow* w, double x, double y) {
+            auto* self = static_cast<PrototypeWindow*>(glfwGetWindowUserPointer(w));
+            if (self != nullptr) {
+                self->on_cursor_move(static_cast<float>(x), static_cast<float>(y));
+            }
+        });
+
+        while (!glfwWindowShouldClose(window)) {
+            int framebuffer_w = 0;
+            int framebuffer_h = 0;
+            glfwGetFramebufferSize(window, &framebuffer_w, &framebuffer_h);
+
+            int window_w = 0;
+            int window_h = 0;
+            glfwGetWindowSize(window, &window_w, &window_h);
+
+            draw(window_w, window_h, framebuffer_w, framebuffer_h);
+
+            glfwSwapBuffers(window);
+            glfwPollEvents();
         }
 
-        XFreeGC(display, gc);
-        XDestroyWindow(display, window);
-        XCloseDisplay(display);
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return true;
     }
 
   private:
@@ -266,7 +229,7 @@ class PrototypeWindow {
         refresh_analysis();
     }
 
-    void begin_drag(int mouse_x, int mouse_y) {
+    void begin_drag(float mouse_x, float mouse_y) {
         if (!contains(mask_rect_, mouse_x, mouse_y)) {
             dragging_ = false;
             return;
@@ -281,7 +244,7 @@ class PrototypeWindow {
         last_drag_value_ = value;
     }
 
-    void continue_drag(int mouse_x, int mouse_y) {
+    void continue_drag(float mouse_x, float mouse_y) {
         if (!contains(mask_rect_, mouse_x, mouse_y)) {
             return;
         }
@@ -298,41 +261,88 @@ class PrototypeWindow {
         last_drag_value_ = value;
     }
 
-    void draw(Display* display, Window window, GC gc, int width, int height) {
-        XClearWindow(display, window);
-
-        const int margin = 24;
-        const int plot_height = (height - (margin * 5)) / 4;
-
-        pre_rect_ = Rect{margin, margin + 20, width - (margin * 2), plot_height};
-        mask_rect_ = Rect{margin, pre_rect_.y + pre_rect_.h + margin + 10, width - (margin * 2), plot_height};
-        post_rect_ = Rect{margin, mask_rect_.y + mask_rect_.h + margin + 10, width - (margin * 2), plot_height};
-
-        draw_label(display, window, gc, margin, margin + 12, "Sonarium Spectral Interaction Prototype | q=quit, r=reset");
-
-        draw_label(display, window, gc, pre_rect_.x, pre_rect_.y - 8, "Pre Spectrum (dB)");
-        draw_frame(display, window, gc, pre_rect_);
-        draw_curve(display, window, gc, pre_rect_, pre_db_, -120.0f, 12.0f);
-
-        draw_label(display, window, gc, mask_rect_.x, mask_rect_.y - 8,
-                   "Gain Mask Editor (click=set node, drag=draw ramp, range -24dB..+24dB)");
-        draw_frame(display, window, gc, mask_rect_);
-        draw_curve(display, window, gc, mask_rect_, mask_db_, -24.0f, 24.0f);
-
-        for (std::size_t i = 0; i < mask_nodes_.size(); i += 8) {
-            const int x = map_index_to_x(mask_rect_, i, mask_nodes_.size());
-            XDrawLine(display, window, gc, x, mask_rect_.y + mask_rect_.h, x, mask_rect_.y + mask_rect_.h + 4);
+    void on_key(GLFWwindow* window, int key, int action) {
+        if (action != GLFW_PRESS) {
+            return;
         }
 
-        draw_label(display, window, gc, post_rect_.x, post_rect_.y - 8, "Post Spectrum (dB)");
-        draw_frame(display, window, gc, post_rect_);
-        draw_curve(display, window, gc, post_rect_, post_db_, -120.0f, 12.0f);
+        if (key == GLFW_KEY_Q || key == GLFW_KEY_ESCAPE) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+            return;
+        }
 
-        const std::string note =
-            "Engine updates route through EngineFacade::set_gain_mask_nodes(); spectrum is recomputed after each edit.";
-        draw_label(display, window, gc, margin, post_rect_.y + post_rect_.h + 24, note);
+        if (key == GLFW_KEY_R) {
+            engine_.update_state(sonarium::core::state::EngineState{});
+            mask_nodes_ = engine_.state().gain_mask.mask_nodes_normalized;
+            refresh_analysis();
+        }
+    }
 
-        XFlush(display);
+    void on_mouse_button(GLFWwindow* window, int button, int action) {
+        if (button != GLFW_MOUSE_BUTTON_LEFT) {
+            return;
+        }
+
+        double x = 0.0;
+        double y = 0.0;
+        glfwGetCursorPos(window, &x, &y);
+
+        if (action == GLFW_PRESS) {
+            begin_drag(static_cast<float>(x), static_cast<float>(y));
+        } else if (action == GLFW_RELEASE) {
+            dragging_ = false;
+        }
+    }
+
+    void on_cursor_move(float x, float y) {
+        if (dragging_) {
+            continue_drag(x, y);
+        }
+    }
+
+    void draw(int window_w, int window_h, int framebuffer_w, int framebuffer_h) {
+        glViewport(0, 0, framebuffer_w, framebuffer_h);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0.0, static_cast<double>(window_w), static_cast<double>(window_h), 0.0, -1.0, 1.0);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        const float margin = 24.0f;
+        const float plot_height = (static_cast<float>(window_h) - (margin * 5.0f)) / 4.0f;
+
+        pre_rect_ = Rect{margin, margin + 20.0f, static_cast<float>(window_w) - (margin * 2.0f), plot_height};
+        mask_rect_ =
+            Rect{margin, pre_rect_.y + pre_rect_.h + margin + 10.0f, static_cast<float>(window_w) - (margin * 2.0f), plot_height};
+        post_rect_ =
+            Rect{margin, mask_rect_.y + mask_rect_.h + margin + 10.0f, static_cast<float>(window_w) - (margin * 2.0f), plot_height};
+
+        glColor3f(0.15f, 0.15f, 0.15f);
+        draw_rect_outline(pre_rect_);
+        draw_rect_outline(mask_rect_);
+        draw_rect_outline(post_rect_);
+
+        glColor3f(0.10f, 0.24f, 0.74f);
+        draw_curve(pre_rect_, pre_db_, -120.0f, 12.0f);
+
+        glColor3f(0.85f, 0.20f, 0.12f);
+        draw_curve(mask_rect_, mask_db_, -24.0f, 24.0f);
+
+        glColor3f(0.40f, 0.40f, 0.40f);
+        for (std::size_t i = 0; i < mask_nodes_.size(); i += 8) {
+            const float x = map_index_to_x(mask_rect_, i, mask_nodes_.size());
+            glBegin(GL_LINES);
+            glVertex2f(x, mask_rect_.y + mask_rect_.h);
+            glVertex2f(x, mask_rect_.y + mask_rect_.h + 4.0f);
+            glEnd();
+        }
+
+        glColor3f(0.00f, 0.45f, 0.20f);
+        draw_curve(post_rect_, post_db_, -120.0f, 12.0f);
+
     }
 
     std::vector<float> input_;
@@ -356,6 +366,5 @@ class PrototypeWindow {
 
 int main() {
     PrototypeWindow app;
-    app.run();
-    return 0;
+    return app.run() ? 0 : 1;
 }

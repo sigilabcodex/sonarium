@@ -48,14 +48,14 @@ All mask edits are routed through:
 `EngineFacade` remains the seam responsible for synchronizing processor parameters from state.
 
 ## UI approach chosen
-The prototype uses a **minimal immediate-mode style native X11 loop**:
+The prototype now uses a **minimal immediate-mode style GLFW shell**:
 
 - single event loop,
-- direct drawing of line plots,
+- OpenGL context with direct line-plot drawing,
 - no heavyweight UI framework,
 - small temporary code footprint suitable for prototyping.
 
-This keeps the pass focused on validating interaction and state flow rather than framework architecture.
+This keeps the pass focused on validating interaction and state flow rather than framework architecture while avoiding X11-only constraints.
 
 ## Build and run
 
@@ -74,7 +74,7 @@ cmake --build build
 
 ## Temporary limitations
 
-1. Graphics path is a prototype-only native window, not a production UI layer.
+1. Graphics path is a prototype-only shell, not a production UI layer.
 2. No plugin wrapper integration.
 3. No undo/redo command stack.
 4. No dedicated decimated analysis stream from the STFT path.
