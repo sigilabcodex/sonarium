@@ -4,6 +4,14 @@ This repository contains Sonarium's early DSP core plus a minimal graphical spec
 
 ## Build
 
+Dependencies for the graphical prototype:
+
+- CMake 3.20+
+- OpenGL development headers/libraries
+- GLFW 3.3+ development package (Wayland/X11 backend support is provided by GLFW and distro build options)
+
+Build:
+
 ```bash
 cmake -S . -B build
 cmake --build build
@@ -29,7 +37,7 @@ The offline harness runs a generated tone through STFT + spectral gain mask proc
 ./build/sonarium_spectral_interaction_prototype
 ```
 
-The prototype opens a lightweight X11 window with three live graphs:
+The prototype opens a lightweight GLFW window shell with three live graphs:
 
 - pre spectrum (dB),
 - gain-mask curve (dB),
@@ -44,4 +52,11 @@ Interaction:
 
 Edits are routed through `EngineFacade` state APIs and immediately trigger post-spectrum recomputation.
 
-See `docs/architecture/phase2-spectral-interaction-prototype-pass.md` for scope, boundaries, limitations, and next-step recommendations.
+Backend notes:
+
+- On Linux sessions running Wayland, GLFW will use Wayland when available.
+- On Linux sessions running X11 (or Wayland with XWayland fallback), GLFW will run on X11.
+- Keyboard/mouse interaction is intentionally prototype-grade (single-window, immediate redraw, no text widget stack).
+
+See `docs/architecture/phase2-spectral-interaction-prototype-pass.md` and
+`docs/architecture/phase2-shell-backend-transition.md` for scope, boundaries, migration rationale, and known limitations.
